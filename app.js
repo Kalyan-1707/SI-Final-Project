@@ -174,6 +174,142 @@ app.post('/speech', (req, res) => {
 })
 
 
+//endpoint which takes input audio file, recognizes and translates the text and returns json response sample file 'https://filebin.net/tyz9u79mkyvdot23/Why_Reading__Books_.wav'
+/**
+ * @swagger
+ * /translate:
+ *   post:
+ *     summary: Translate audio file to text
+ *     description: This endpoint accepts an audio file URL as a query parameter, retrieves the audio, recognizes the speech, and translates it to the specified target language. A successful response contains a JSON object with the original text and translated text in both languages. Example https://filebin.net/tyz9u79mkyvdot23/Why_Reading__Books_.wav. use filebin.net to upload audio file and get url.
+ *     parameters:
+ *       - in: query
+ *         name: url 
+ *         description: URL of the audio file to be translated.
+ *         required: true
+ *         type: string
+ *     responses:
+ *       '200':
+ *         description: Translation successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 originalText:
+ *                   type: object
+ *                   properties:
+ *                     text:
+ *                       type: string
+ *                       description: Recognized text in source language
+ *                     language:
+ *                       type: string
+ *                       description: Source language (en-US in this example)
+ *                 translation:
+ *                   type: object
+ *                   properties:
+ *                     text:
+ *                       type: string
+ *                       description: Translated text in target language
+ *                     language:
+ *                       type: string
+ *                       description: Target language
+ *                 example:
+ *                     {
+ *                       "originalText": {
+ *                         "text": "Why reading books?",
+ *                         "language": "en-US"
+ *                       },
+ *                       "translation": {
+ *                         "text": "Why reading books?",
+ *                         "language": "en-US"
+ *                       }
+ *                     }
+ *       '400':
+ *         description: Speech recognition failed or missing required parameter
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Error message indicating the issue
+ *       '499':
+ *         description: Translation cancelled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Reason for translation cancellation
+ *       '500':
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Error message indicating server-side issue
+ */         
+app.post('/translate', async (req, res) => {
+    const url = req.query.url;
+
+    try {
+          // This example requires environment variables named "SPEECH_KEY" and "SPEECH_REGION"
+const speechTranslationConfig = sdk.SpeechTranslationConfig.fromSubscription(process.env.SPEECH_KEY, process.env.SPEECH_REGION);
+speechTranslationConfig.speechRecognitionLanguage = "en-US";
+
+var language = "it";
+speechTranslationConfig.addTargetLanguage(language);
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        const audioData = Buffer.from(response.data, 'binary');
+
+        // create audio config
+        let audioConfig = sdk.AudioConfig.fromWavFileInput(audioData);
+     
+     let translationRecognizer = new sdk.TranslationRecognizer(speechTranslationConfig, audioConfig);
+
+    translationRecognizer.recognizeOnceAsync(result => {
+        switch (result.reason) {
+            case sdk.ResultReason.TranslatedSpeech:
+                // console.log(`RECOGNIZED: Text=${result.text}`);
+                // console.log("Translated into [" + language + "]: " + result.translations.get(language));
+                const translation = {
+                    originalText:{
+                        text: result.text,
+                        language: "en-US"
+                    }, 
+                    translation: {
+                        text: result.translations.get(language),
+                        language: language
+                    }
+                }
+                res.send(translation).status(200);
+                break;
+            case sdk.ResultReason.NoMatch:
+                // console.log("NOMATCH: Speech could not be recognized.");
+                res.send("NOMATCH: Speech could not be recognized.").status(400);
+                break;
+            case sdk.ResultReason.Canceled:
+                const cancellation = sdk.CancellationDetails.fromResult(result);
+                // console.log(`CANCELED: Reason=${cancellation.reason}`);
+                res.send(`CANCELED: Reason=${cancellation.reason}`).status(499);
+                break;
+        }
+        translationRecognizer.close();
+    });
+}
+catch (error) {
+    res.status(500).send('Error retrieving audio file');
+}
+
+})
+
+
 app.listen(3000, () => {
     console.log('Listening on port 3000');
 })
