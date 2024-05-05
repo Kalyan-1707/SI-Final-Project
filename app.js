@@ -6,6 +6,8 @@ const app = express();
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const axios = require('axios');
+const dotenv = require('dotenv');
+dotenv.config();
 
 const options = {
     swaggerDefinition: {
